@@ -1,0 +1,75 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: caterer
+  namespace: hunza
+  labels:
+    run: caterer
+spec:
+  ports:
+    - name: http
+      port: 80
+      protocol: TCP
+    - name: http-actuator
+      port: 8081
+      protocol: TCP
+  type: NodePort
+  selector:
+    run: caterer
+---
+
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: caterer
+  namespace: hunza
+spec:
+  serviceName: caterer
+  selector:
+    matchLabels:
+      run: caterer
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        run: caterer
+    spec:
+      containers:
+        - name: caterer
+          image: gitlab.hunza.com:4567/server/caterer:develop
+          env:
+            - name: IS_STATEFUL_SET
+              value: "1"
+            - name: COMMIT_POINT
+              value: "8293517575d74e2b3e58f5c8cb25816168e95037"
+          imagePullPolicy: Always
+          resources:
+            limits:
+              memory: 300Mi
+            requests:
+              memory: 128Mi
+      imagePullSecrets:
+        - name: scglpullsecret
+---
+
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: caterer
+  namespace: hunza
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+spec:
+  tls:
+    - hosts:
+        - dev-services.hunza.com
+      secretName: sc-tls-secret
+  rules:
+    - host: dev-services.hunza.com
+      http:
+        paths:
+          - backend:
+              serviceName: caterer
+              servicePort: 80
+            path: /caterer
